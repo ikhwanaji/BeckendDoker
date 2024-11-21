@@ -1,16 +1,24 @@
-const express = require("express");
-const cors = require("cors");
-const dotenv = require("dotenv");
-const { testConnection } = require("./Database/db.js");
+const express = require('express');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const dotenv = require('dotenv');
+const userRoutes = require('./routes/userRoutes')
 
-
+// Konfigurasi environment variables
 dotenv.config();
+
 const app = express();
+const PORT = process.env.PORT ;
 
+// Middleware
 app.use(cors());
-app.use(express.json());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
-app.listen(process.env.APP_PORT, async () => {
-  await testConnection();
-  console.log(`Running at http://localhost:${process.env.APP_PORT}`);
+// Rute
+app.use('/api', userRoutes);
+
+// Jalankan server
+app.listen(PORT, () => {
+  console.log(`Server berjalan di http://localhost:${PORT}`);
 });
