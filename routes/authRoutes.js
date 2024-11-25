@@ -2,12 +2,20 @@ const express = require('express');
 const router = express.Router();
 const passport = require('passport');
 const jwt = require('jsonwebtoken');
-const { registerValidation, register, login, getProfile } = require('../controllers/authController');
-// const passwordController = require('../controllers/passwordController');
+const { registerValidation, register, login, getProfile, getUsers, updateUser, updateUserPassword, logout } = require('../controllers/authController');
+const { authLogout, authenticateToken, authorizeUserOrAdmin } = require(`../middleware/authMiddleware`);
+const { validateImageUpload } = require('../middleware/uploadMiddleware');
 
 // Public routes
-router.post('/register', registerValidation,register);
+router.post('/register', registerValidation, register);
 router.post('/login', login);
+router.post('/logout', authLogout, logout);
+// Route untuk get all users
+router.get('/users', getUsers);
+// Route untuk get user by ID
+router.get('/users/:userId', getUsers);
+router.put('/users/:userId', validateImageUpload, updateUser);
+router.put('/users/:userId/password', updateUserPassword);
 
 // Route Google OAuth - Inisiasi Login
 router.get(
@@ -43,15 +51,15 @@ router.get(
 // Protected routes
 router.get('/profile', passport.authenticate('jwt', { session: false }), getProfile);
 
-// Logout route
-router.get('/auth/logout', (req, res) => {
-  req.logout((err) => {
-    if (err) {
-      return res.status(500).json({ message: 'Logout failed' });
-    }
-    res.json({ message: 'Logout successful' });
-  });
-});
+// // Logout route
+// router.get('/auth/logout', (req, res) => {
+//   req.logout((err) => {
+//     if (err) {
+//       return res.status(500).json({ message: 'Logout failed' });
+//     }
+//     res.json({ message: 'Logout successful' });
+//   });
+// });
 
 // Route untuk mendapatkan status autentikasi
 router.get('/auth/status', (req, res) => {
@@ -74,6 +82,5 @@ router.get('/auth/status', (req, res) => {
 router.get('/protected', passport.authenticate('jwt', { session: false }), (req, res) => {
   res.json(req.user);
 });
-
 
 module.exports = router;
