@@ -1,17 +1,18 @@
 const passport = require('../config/passport');
 const jwt = require('jsonwebtoken');
+const { pool } = require('../config/db');
 
 const authenticate = (req, res, next) => {
   passport.authenticate('jwt', { session: false }, (err, user, info) => {
     if (err) return next(err);
-    
+
     if (!user) {
       return res.status(401).json({
         status: 'error',
-        message: info.message || 'Unauthorized'
+        message: info.message || 'Unauthorized',
       });
     }
-    
+
     req.user = user;
     next();
   })(req, res, next);
@@ -22,14 +23,14 @@ const authorize = (roles) => {
     if (!req.user) {
       return res.status(401).json({
         status: 'error',
-        message: 'Unauthorized'
+        message: 'Unauthorized',
       });
     }
 
     if (!roles.includes(req.user.role)) {
       return res.status(403).json({
         status: 'error',
-        message: 'Forbidden'
+        message: 'Forbidden',
       });
     }
 
@@ -72,7 +73,7 @@ const authenticateToken = async (req, res, next) => {
   if (!token) {
     return res.status(401).json({
       status: 'error',
-      message: 'Token tidak tersedia. Autentikasi diperlukan.'
+      message: 'Token tidak tersedia. Autentikasi diperlukan.',
     });
   }
 
@@ -83,15 +84,12 @@ const authenticateToken = async (req, res, next) => {
     // Cari user di database untuk validasi tambahan
     const connection = await pool.getConnection();
     try {
-      const [users] = await connection.query(
-        'SELECT userId, nama, email, role FROM users WHERE userId = ?', 
-        [decoded.userId]
-      );
+      const [users] = await connection.query('SELECT userId, nama, email, gambar, role FROM users WHERE userId = ?', [decoded.userId]);
 
       if (users.length === 0) {
         return res.status(401).json({
           status: 'error',
-          message: 'Pengguna tidak ditemukan'
+          message: 'Pengguna tidak ditemukan',
         });
       }
 
@@ -105,13 +103,13 @@ const authenticateToken = async (req, res, next) => {
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({
         status: 'error',
-        message: 'Token telah kedaluwarsa'
+        message: 'Token telah kedaluwarsa',
       });
     }
 
     return res.status(403).json({
       status: 'error',
-      message: 'Token tidak valid'
+      message: 'Token tidak valid',
     });
   }
 };
@@ -122,7 +120,7 @@ const requireAdmin = (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({
       status: 'error',
-      message: 'Autentikasi diperlukan'
+      message: 'Autentikasi diperlukan',
     });
   }
 
@@ -130,10 +128,9 @@ const requireAdmin = (req, res, next) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({
       status: 'error',
-      message: 'Anda tidak memiliki izin. Hanya admin yang dapat mengakses.'
+      message: 'Anda tidak memiliki izin. Hanya admin yang dapat mengakses.',
     });
   }
-
   next();
 };
 
@@ -143,7 +140,7 @@ const authorizeUserOrAdmin = (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({
       status: 'error',
-      message: 'Autentikasi diperlukan'
+      message: 'Autentikasi diperlukan',
     });
   }
 
@@ -156,9 +153,65 @@ const authorizeUserOrAdmin = (req, res, next) => {
   } else {
     return res.status(403).json({
       status: 'error',
-      message: 'Anda tidak memiliki izin untuk mengakses atau mengubah data ini'
+      message: 'Anda tidak memiliki izin untuk mengakses atau mengubah data ini',
     });
   }
+};
+
+const checkAdminRole = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Tidak terautentikasi' });
+  }
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Akses ditolak' });
+  }
+  next();
+};
+
+const requireAdminAuth = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).json({
+      status: 'error',
+      message: 'Token tidak ada. Otorisasi ditolak.',
+    });
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    // Pastikan yang logout adalah admin
+    if (decoded.role !== 'admin') {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Akses ditolak. Anda bukan admin.',
+      });
+    }
+
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(401).json({
+      status: 'error',
+      message: 'Token tidak valid',
+    });
+  }
+};
+
+const restrictTo = (...roles) => {
+  return (req, res, next) => {
+    // roles ['admin', 'user']
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Anda tidak memiliki izin untuk melakukan aksi ini'
+      });
+    }
+    next();
+  };
 };
 
 module.exports = {
@@ -167,5 +220,8 @@ module.exports = {
   authLogout,
   authenticateToken,
   requireAdmin,
-  authorizeUserOrAdmin
+  authorizeUserOrAdmin,
+  checkAdminRole,
+  requireAdminAuth,
+  restrictTo
 };
