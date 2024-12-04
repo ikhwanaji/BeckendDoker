@@ -3,13 +3,15 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const userRoutes = require('./routes/authRoutes');
+const kategoriRoutes = require('./routes/kategoriRoutes');
+const produkRoutes = require('./routes/produkRoutes');
 const { notFoundHandler, errorHandler } = require('./middleware/errorMiddleware');
 
 // Konfigurasi environment variables
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3040;
+const PORT = process.env.PORT;
 
 // Middleware CORS dengan konfigurasi lebih lengkap
 app.use(
@@ -33,6 +35,8 @@ app.use((req, res, next) => {
 
 // Rute
 app.use('/api/auth', userRoutes);
+app.use('/api/kategoris', kategoriRoutes);
+app.use('/api/produks', produkRoutes);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
