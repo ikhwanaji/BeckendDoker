@@ -97,20 +97,40 @@ exports.deleteKategori = async (req, res) => {
     connection = await pool.getConnection();
     const { kategoriId } = req.params;
     
-    const [result] = await connection.query(
+    // Mulai transaksi
+    await connection.beginTransaction();
+    
+    // Hapus kategori
+    const [deleteResult] = await connection.query(
       'DELETE FROM kategori WHERE kategoriId = ?', 
       [kategoriId]
     );
     
-    if (result.affectedRows === 0) {
+    if (deleteResult.affectedRows === 0) {
+      await connection.rollback();
       return res.status(404).json({ message: 'Kategori not found' });
     }
     
+    // Temukan ID maksimum saat ini
+    const [maxIdResult] = await connection.query(
+      'SELECT COALESCE(MAX(kategoriId), 0) + 1 as nextId FROM kategori'
+    );
+    const nextId = maxIdResult[0].nextId;
+
+    // Reset AUTO_INCREMENT ke ID maksimum + 1
+    await connection.query(`ALTER TABLE kategori AUTO_INCREMENT = ${nextId}`);
+    
+    // Commit transaksi
+    await connection.commit();
+    
     res.json({ 
-      message: 'Kategori deleted successfully',
+      message: 'Kategori deleted successfully and ID reset',
       kategoriId 
     });
   } catch (error) {
+    // Rollback transaksi jika terjadi error
+    if (connection) await connection.rollback();
+    
     res.status(500).json({ 
       message: 'Error deleting kategori', 
       error: error.message 

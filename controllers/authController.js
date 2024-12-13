@@ -173,7 +173,7 @@ const login = [
         message: 'Login berhasil',
         token: `Bearer ${token}`,
         user: {
-          id: user.id,
+          id: user.userId,
           nama: user.nama,
           email: user.email,
           no_hp: user.no_hp,

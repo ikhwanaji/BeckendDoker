@@ -29,7 +29,7 @@ const uploadProfileImage = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({
         status: 'error',
-        message: 'Tidak ada gambar yang diunggah'
+        message: 'Tidak ada gambar yang diunggah',
       });
     }
 
@@ -56,16 +56,16 @@ const uploadProfileImage = async (req, res) => {
     res.status(200).json({
       status: 'success',
       message: 'Gambar profil berhasil diperbarui',
-      data: { 
-        gambar: profileImageUrl 
-      }
+      data: {
+        gambar: profileImageUrl,
+      },
     });
   } catch (error) {
     console.error('Error uploading profile image:', error);
     res.status(500).json({
       status: 'error',
       message: 'Gagal mengunggah gambar profil',
-      details: error.message
+      details: error.message,
     });
   }
 };
@@ -110,14 +110,14 @@ const deleteProfileImage = async (req, res) => {
     res.status(200).json({
       status: 'success',
       message: 'Gambar profil berhasil dihapus',
-      data: { gambar: null }
+      data: { gambar: null },
     });
   } catch (error) {
     console.error('Error deleting profile image:', error);
     res.status(500).json({
       status: 'error',
       message: 'Gagal menghapus gambar profil',
-      details: error.message
+      details: error.message,
     });
   }
 };
@@ -128,7 +128,7 @@ const uploadProdukImage = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({
         status: 'error',
-        message: 'Tidak ada gambar yang diunggah'
+        message: 'Tidak ada gambar yang diunggah',
       });
     }
 
@@ -144,16 +144,16 @@ const uploadProdukImage = async (req, res) => {
     res.status(200).json({
       status: 'success',
       message: 'Gambar produk berhasil diunggah',
-      data: { 
-        gambar: produkImageUrl 
-      }
+      data: {
+        gambar: produkImageUrl,
+      },
     });
   } catch (error) {
     console.error('Error uploading produk image:', error);
     res.status(500).json({
       status: 'error',
       message: 'Gagal mengunggah gambar produk',
-      details: error.message
+      details: error.message,
     });
   }
 };
@@ -166,7 +166,7 @@ const updateProdukImage = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({
         status: 'error',
-        message: 'Tidak ada gambar yang diunggah'
+        message: 'Tidak ada gambar yang diunggah',
       });
     }
 
@@ -193,16 +193,16 @@ const updateProdukImage = async (req, res) => {
     res.status(200).json({
       status: 'success',
       message: 'Gambar produk berhasil diperbarui',
-      data: { 
-        gambar: produkImageUrl 
-      }
+      data: {
+        gambar: produkImageUrl,
+      },
     });
   } catch (error) {
     console.error('Error updating produk image:', error);
     res.status(500).json({
       status: 'error',
       message: 'Gagal memperbarui gambar produk',
-      details: error.message
+      details: error.message,
     });
   }
 };
@@ -247,18 +247,36 @@ const deleteProdukImage = async (req, res) => {
     res.status(200).json({
       status: 'success',
       message: 'Gambar produk berhasil dihapus',
-      data: { gambar: null }
+      data: { gambar: null },
     });
   } catch (error) {
     console.error('Error deleting produk image:', error);
     res.status(500).json({
       status: 'error',
       message: 'Gagal menghapus gambar produk',
-      details: error.message
+      details: error.message,
     });
   }
 };
 
+const getPaketImage = (req, res) => {
+  const { filename } = req.params;
+
+  // Tentukan direktori penyimpanan gambar
+  const imagePath = path.join(__dirname, '../uploads/paket', filename);
+
+  // Cek apakah file ada
+  fs.access(imagePath, fs.constants.F_OK, (err) => {
+    if (err) {
+      // Jika file tidak ditemukan, kirim gambar default
+      const defaultImagePath = path.join(__dirname, '../uploads/default-produk.jpg');
+      return res.sendFile(defaultImagePath);
+    }
+
+    // Kirim file gambar
+    res.sendFile(imagePath);
+  });
+};
 
 module.exports = {
   getArtikelImage,
@@ -268,5 +286,6 @@ module.exports = {
   uploadProdukImage,
   updateProdukImage,
   getProdukImage,
-  deleteProdukImage
+  deleteProdukImage,
+  getPaketImage,
 };

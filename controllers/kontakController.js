@@ -73,9 +73,8 @@ const deleteLaporan = async (req, res) => {
   }
 };
 
-
 module.exports = {
   createLaporan,
   getLaporan,
-  deleteLaporan
+  deleteLaporan,
 };
