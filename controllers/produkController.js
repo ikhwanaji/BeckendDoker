@@ -265,47 +265,54 @@ const updateProduk = async (req, res) => {
 // Hapus Produk
 const hapusProduk = async (req, res) => {
   const { id } = req.params;
-
-  // Dapatkan koneksi dari pool
   const connection = await pool.getConnection();
 
   try {
-    // Mulai transaksi
     await connection.beginTransaction();
 
-    // Cari produk untuk mendapatkan nama file gambar
-    const [existingProduk] = await connection.query('SELECT gambar FROM produk WHERE produkId = ?', [id]);
+    // Cari produk
+    const [existingProduk] = await connection.query(
+      'SELECT gambar FROM produk WHERE produkId = ?', 
+      [id]
+    );
 
     if (existingProduk.length === 0) {
       await connection.rollback();
       return res.status(404).json({
         status: 'error',
-        message: 'Produk tidak ditemukan',
+        message: 'Produk tidak ditemukan'
       });
     }
 
     // Hapus gambar jika ada
-    if (existingProduk[0].gambar) {
-      await fs.unlink(path.join('uploads/produks', existingProduk[0].gambar)).catch(console.error);
+    const gambarFilename = existingProduk[0].gambar;
+    if (gambarFilename) {
+      const gambarPath = path.join('uploads/produks', gambarFilename);
+      
+      try {
+        // Gunakan fs.access untuk memeriksa file
+        await fs.access(gambarPath);
+        await fs.unlink(gambarPath);
+      } catch (fileError) {
+        // Log warning jika file tidak ditemukan, tapi lanjutkan proses
+        console.warn(`Gambar tidak ditemukan: ${gambarPath}`, fileError);
+      }
     }
 
-    // Hapus produk dari database
-    const [deleteResult] = await connection.query('DELETE FROM produk WHERE produkId = ?', [id]);
+    // Hapus produk
+    const [deleteResult] = await connection.query(
+      'DELETE FROM produk WHERE produkId = ?', 
+      [id]
+    );
 
+    // Pastikan produk berhasil dihapus
     if (deleteResult.affectedRows === 0) {
       await connection.rollback();
       return res.status(404).json({
         status: 'error',
-        message: 'Produk tidak ditemukan',
+        message: 'Gagal menghapus produk'
       });
     }
-
-    // Dapatkan ID maksimum saat ini
-    const [maxIdResult] = await connection.query('SELECT COALESCE(MAX(produkId), 0) as maxId FROM produk');
-    const maxId = maxIdResult[0].maxId;
-
-    // Reset AUTO_INCREMENT
-    await connection.query(`ALTER TABLE produk AUTO_INCREMENT = ${maxId + 1}`);
 
     // Commit transaksi
     await connection.commit();
@@ -313,21 +320,22 @@ const hapusProduk = async (req, res) => {
     res.status(200).json({
       status: 'success',
       message: 'Produk berhasil dihapus',
-      produkId: id,
-      currentMaxId: maxId,
+      produkId: id
     });
-  } catch (error) {
-    // Rollback transaksi jika terjadi kesalahan
-    await connection.rollback();
 
+  } catch (error) {
+    // Rollback transaksi jika terjadi error
+    await connection.rollback();
+    
     console.error('Error menghapus produk:', error);
+    
     res.status(500).json({
       status: 'error',
       message: 'Gagal menghapus produk',
-      details: error.message,
+      details: error.message
     });
   } finally {
-    // Pastikan koneksi ditutup
+    // Pastikan koneksi database selalu dilepas
     connection.release();
   }
 };

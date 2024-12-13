@@ -7,8 +7,8 @@ const { getProdukImage } = require('../controllers/imageController');
 
 // Rute Produk
 router.post('/',validateProdukUpload, tambahProduk);
-router.get('/', semuaProduk, );
-router.get('/:id', produkById, );
+router.get('/', semuaProduk );
+router.get('/:id', produkById );
 router.put('/:id',validateProdukUpload, updateProduk);
 router.delete('/:id', hapusProduk);
 router.get('/images/:filename', getProdukImage);

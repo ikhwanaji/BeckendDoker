@@ -5,6 +5,9 @@ const dotenv = require('dotenv');
 const userRoutes = require('./routes/authRoutes');
 const kategoriRoutes = require('./routes/kategoriRoutes');
 const produkRoutes = require('./routes/produkRoutes');
+const shippingMethodRoutes = require('./routes/shippingMethodRoutes');
+const paketRoutes = require('./routes/paketRoutes');
+const pemesananRoutes = require('./routes/pemesananRoutes');
 const { notFoundHandler, errorHandler } = require('./middleware/errorMiddleware');
 
 // Konfigurasi environment variables
@@ -37,6 +40,9 @@ app.use((req, res, next) => {
 app.use('/api/auth', userRoutes);
 app.use('/api/kategoris', kategoriRoutes);
 app.use('/api/produks', produkRoutes);
+app.use('/api/shipping-methods', shippingMethodRoutes);
+app.use('/api', paketRoutes);
+app.use('/api/pemesanan', pemesananRoutes);
 app.use(notFoundHandler);
 app.use(errorHandler);
 

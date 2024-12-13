@@ -38,79 +38,34 @@ const authorize = (roles) => {
   };
 };
 
-const authLogout = (req, res, next) => {
-  // Ambil token dari header Authorization
-  const authHeader = req.headers.authorization;
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({
-      status: 'error',
-      message: 'Token tidak ditemukan',
-    });
-  }
-
-  // Verifikasi token
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({
-        status: 'error',
-        message: 'Token tidak valid',
-      });
-    }
-    // Simpan informasi user ke request untuk digunakan di route selanjutnya
-    req.user = user;
-    next();
-  });
-};
-
 // Middleware autentikasi
 const authenticateToken = async (req, res, next) => {
-  // Ambil token dari header Authorization
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  const token = authHeader && authHeader.split(' ')[1];
 
-  if (!token) {
-    return res.status(401).json({
-      status: 'error',
-      message: 'Token tidak tersedia. Autentikasi diperlukan.',
-    });
+  if (token == null) {
+    return res.status(401).json({ message: 'Token tidak tersedia' });
   }
 
   try {
     // Verifikasi token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Cari user di database untuk validasi tambahan
-    const connection = await pool.getConnection();
-    try {
-      const [users] = await connection.query('SELECT userId, nama, email, gambar, role FROM users WHERE userId = ?', [decoded.userId]);
+    // Ambil detail user dari database
+    const [users] = await pool.query('SELECT userId, nama, email, no_hp FROM users WHERE userId = ?', [decoded.id]);
 
-      if (users.length === 0) {
-        return res.status(401).json({
-          status: 'error',
-          message: 'Pengguna tidak ditemukan',
-        });
-      }
-
-      // Tambahkan informasi user ke request
-      req.user = users[0];
-      next();
-    } finally {
-      connection.release();
+    if (users.length === 0) {
+      return res.status(401).json({ message: 'User tidak ditemukan' });
     }
+
+    // Tambahkan informasi user ke request
+    req.user = users[0];
+    next();
   } catch (error) {
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        status: 'error',
-        message: 'Token telah kedaluwarsa',
-      });
+    if (error.nama === 'TokenExpiredError') {
+      return res.status(401).json({ message: 'Token telah kadaluarsa' });
     }
-
-    return res.status(403).json({
-      status: 'error',
-      message: 'Token tidak valid',
-    });
+    return res.status(403).json({ message: 'Token tidak valid' });
   }
 };
 
@@ -207,11 +162,37 @@ const restrictTo = (...roles) => {
     if (!roles.includes(req.user.role)) {
       return res.status(403).json({
         status: 'error',
-        message: 'Anda tidak memiliki izin untuk melakukan aksi ini'
+        message: 'Anda tidak memiliki izin untuk melakukan aksi ini',
       });
     }
     next();
   };
+};
+
+const authLogout = (req, res, next) => {
+  // Ambil token dari header Authorization
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({
+      status: 'error',
+      message: 'Token tidak ditemukan',
+    });
+  }
+
+  // Verifikasi token
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Token tidak valid',
+      });
+    }
+    // Simpan informasi user ke request untuk digunakan di route selanjutnya
+    req.user = user;
+    next();
+  });
 };
 
 module.exports = {
@@ -223,5 +204,5 @@ module.exports = {
   authorizeUserOrAdmin,
   checkAdminRole,
   requireAdminAuth,
-  restrictTo
+  restrictTo,
 };
