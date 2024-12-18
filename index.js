@@ -19,7 +19,10 @@ const PORT = process.env.PORT;
 // Middleware CORS dengan konfigurasi lebih lengkap
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL, // Default Vite port
+    origin:[ 
+      process.env.FRONTEND_URL, 
+      'https://doker.vercel.app',
+    ],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
@@ -69,3 +72,5 @@ process.on('SIGTERM', () => {
 });
 
 startServer();
+
+module.exports = app;
