@@ -63,9 +63,17 @@ const createPemesanan = async (req, res) => {
       return name.length > maxLength ? name.substring(0, maxLength - 3) + '...' : name;
     };
 
+    const [shippingRows] = await connection.query('SELECT biaya FROM metode_pengiriman WHERE shippingId = ?', [shippingId]);
+
+    if (shippingRows.length === 0) {
+      throw new Error('Metode pengiriman tidak valid');
+    }
+
+    const biayaPengiriman = shippingRows[0].biaya;
+
     // Hitung ulang harga untuk memastikan konsistensi
     const itemPrice = Math.round(total_harga / jumlah);
-    const calculatedTotalPrice = itemPrice * jumlah;
+    const calculatedTotalPrice = itemPrice * jumlah + biayaPengiriman;
 
     // Persiapkan parameter Midtrans
     const midtransParams = {
@@ -84,6 +92,12 @@ const createPemesanan = async (req, res) => {
           price: itemPrice,
           quantity: jumlah,
           name: truncateName(produkData.nama), // Potong nama produk
+        },
+        {
+          id: 'shipping',
+          price: biayaPengiriman,
+          quantity: 1,
+          name: 'Biaya Pengiriman',
         },
       ],
     };
@@ -195,7 +209,35 @@ const getRiwayatPemesanan = async (req, res) => {
   }
 };
 
+const updatePaymentStatus = async (req, res) => {
+  const { orderId, status } = req.body;
+
+  if (!orderId || !status) {
+    return res.status(400).json({ message: 'Order ID dan status diperlukan' });
+  }
+
+  try {
+    const [result] = await pool.query('UPDATE pemesanan SET status_pembayaran = ? WHERE midtrans_order_id = ?', [status, orderId]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'Pesanan tidak ditemukan' });
+    }
+
+    res.status(200).json({
+      message: 'Status pembayaran berhasil diperbarui',
+      updatedRows: result.affectedRows,
+    });
+  } catch (error) {
+    console.error('Error updating payment status:', error);
+    res.status(500).json({
+      message: 'Gagal memperbarui status pembayaran',
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   createPemesanan,
   getRiwayatPemesanan,
+  updatePaymentStatus,
 };
