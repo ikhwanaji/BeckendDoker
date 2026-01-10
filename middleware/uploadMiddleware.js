@@ -141,14 +141,13 @@ const uploadProdukImage = multer({
   },
 });
 
-
 // Middleware validasi upload
 const validateProdukUpload = (req, res, next) => {
   uploadProdukImage.single('gambar')(req, res, (err) => {
     if (err instanceof multer.MulterError) {
       // Tangani error spesifik dari Multer
       let errorMessage = 'Gagal mengunggah gambar';
-      
+
       switch (err.code) {
         case 'LIMIT_FILE_SIZE':
           errorMessage = 'Ukuran gambar maksimal 10MB';
@@ -214,14 +213,11 @@ const cleanupUploadedFile = (err, req, res, next) => {
 
     return res.status(400).json({
       status: 'error',
-      message: err.message || 'Gagal mengunggah gambar'
+      message: err.message || 'Gagal mengunggah gambar',
     });
   }
   next();
 };
-
-
-
 
 const paketStorage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -253,14 +249,13 @@ const uploadPaketImage = multer({
   },
 });
 
-
 // Middleware validasi upload
 const validatePaketUpload = (req, res, next) => {
   uploadPaketImage.single('gambar')(req, res, (err) => {
     if (err instanceof multer.MulterError) {
       // Tangani error spesifik dari Multer
       let errorMessage = 'Gagal mengunggah gambar';
-      
+
       switch (err.code) {
         case 'LIMIT_FILE_SIZE':
           errorMessage = 'Ukuran gambar maksimal 10MB';
@@ -311,7 +306,6 @@ const validatePaketUpload = (req, res, next) => {
   });
 };
 
-
 module.exports = {
   uploadProfileImage,
   validateImageUpload,
@@ -321,5 +315,5 @@ module.exports = {
   validateProdukUpload,
   cleanupUploadedFile,
   uploadPaketImage,
-  validatePaketUpload
+  validatePaketUpload,
 };

@@ -11,6 +11,10 @@ const pool = mysql.createPool({
   waitForConnections: true, // Menunggu koneksi yang tersedia
   connectionLimit: 10, // Batas koneksi bersamaan
   queueLimit: 0, // Batas antrean koneksi
+  ssl: {
+    rejectUnauthorized: true, // Atau coba set 'false' jika masih timeout
+    minVersion: 'TLSv1.2',
+  },
 });
 
 // Uji koneksi

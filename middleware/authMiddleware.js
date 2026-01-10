@@ -195,6 +195,34 @@ const authLogout = (req, res, next) => {
   });
 };
 
+const isAdmin = async (req, res, next) => {
+  try {
+    // Ambil data user dari request yang sudah diproses oleh middleware authenticate sebelumnya
+    const userId = req.user.userId;
+    
+    // Query untuk memeriksa apakah user adalah admin
+    const [userRows] = await pool.query('SELECT role FROM users WHERE userId = ?', [userId]);
+    
+    if (userRows.length === 0) {
+      return res.status(404).json({ message: 'User tidak ditemukan' });
+    }
+    
+    // Periksa role user
+    if (userRows[0].role !== 'admin') {
+      return res.status(403).json({ message: 'Akses ditolak. Hanya admin yang diizinkan.' });
+    }
+    
+    // Lanjut ke handler berikutnya jika user adalah admin
+    next();
+  } catch (error) {
+    console.error('Admin authorization error:', error);
+    res.status(500).json({
+      message: 'Terjadi kesalahan saat memverifikasi akses admin',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   authenticate,
   authorize,
@@ -205,4 +233,5 @@ module.exports = {
   checkAdminRole,
   requireAdminAuth,
   restrictTo,
+  isAdmin
 };
