@@ -79,7 +79,7 @@ const createPemesanan = async (req, res) => {
     const midtransParams = {
       transaction_details: {
         order_id: orderId,
-        gross_amount: calculatedTotalPrice, // Gunakan total harga yang dibulatkan
+        gross_amount: calculatedTotalPrice,
       },
       customer_details: {
         first_name: truncateName(userData.nama),
@@ -156,59 +156,6 @@ const createPemesanan = async (req, res) => {
   }
 };
 
-const getRiwayatPemesanan = async (req, res) => {
-  const userId = req.user.id; // Dari middleware autentikasi
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 10;
-  const offset = (page - 1) * limit;
-
-  try {
-    // Query untuk mengambil riwayat pemesanan dengan join ke tabel produk
-    const [results] = await pool.query(
-      `
-      SELECT 
-        p.*, 
-        pr.nama AS nama_produk, 
-        pr.gambar AS gambar_produk,
-        s.nama AS nama_shipping
-      FROM pemesanan p
-      JOIN produk pr ON p.produkId = pr.produkId
-      LEFT JOIN metode_pengiriman s ON p.shippingId = s.shippingId
-      WHERE p.userId = ?
-      ORDER BY p.created_at DESC
-      LIMIT ? OFFSET ?
-    `,
-      [userId, limit, offset]
-    );
-
-    // Hitung total halaman
-    const [countResult] = await pool.query(
-      `
-      SELECT COUNT(*) AS total 
-      FROM pemesanan 
-      WHERE userId = ?
-    `,
-      [userId]
-    );
-
-    const totalItems = countResult[0].total;
-    const totalPages = Math.ceil(totalItems / limit);
-
-    res.status(200).json({
-      data: results,
-      currentPage: page,
-      totalPages: totalPages,
-      totalItems: totalItems,
-    });
-  } catch (error) {
-    console.error('Gagal mengambil riwayat pemesanan:', error);
-    res.status(500).json({
-      message: 'Gagal mengambil riwayat pemesanan',
-      error: error.message,
-    });
-  }
-};
-
 const updatePaymentStatus = async (req, res) => {
   const { orderId, status } = req.body;
 
@@ -236,8 +183,253 @@ const updatePaymentStatus = async (req, res) => {
   }
 };
 
+const getRiwayatPemesanan = async (req, res) => {
+  const userId = req.user.userId;
+
+  try {
+    // Query to fetch order history with comprehensive error handling
+    const [results] = await pool.query(
+      `SELECT 
+        p.midtrans_order_id,
+        p.userId, 
+        p.status_pembayaran,
+        p.status_pengiriman,
+        p.created_at,
+        COALESCE(pr.harga, 0) as harga,
+        COALESCE(p.jumlah, 1) as jumlah,
+        COALESCE(p.total_harga, pr.harga * COALESCE(p.jumlah, 1)) as total_harga,
+        COALESCE(pr.nama, 'Produk Tidak Dikenal') AS nama_produk, 
+        COALESCE(pr.gambar, '/path/to/placeholder-image.jpg') AS gambar_produk,
+        COALESCE(s.nama, 'Tidak Diketahui') AS nama_shipping,
+        COALESCE(s.biaya, 0) as biaya_pengiriman
+      FROM pemesanan p
+      LEFT JOIN produk pr ON p.produkId = pr.produkId
+      LEFT JOIN metode_pengiriman s ON p.shippingId = s.shippingId
+      WHERE p.userId = ? AND p.status_pembayaran = 'success'
+      ORDER BY p.created_at DESC`,
+      [userId]
+    );
+
+    // Log for debugging
+    console.log(`Orders found for user ${userId}: ${results.length}`);
+
+    res.status(200).json({
+      data: results,
+      totalItems: results.length,
+    });
+  } catch (error) {
+    console.error('Detailed Order Retrieval Error:', error);
+    res.status(500).json({
+      message: 'Gagal mengambil riwayat pemesanan',
+      error: error.message,
+    });
+  }
+};
+
+const getPemesananById = async (req, res) => {
+  const { orderId } = req.params;
+
+  if (!orderId) {
+    return res.status(400).json({ message: 'ID pesanan diperlukan' });
+  }
+
+  try {
+    // Query untuk mengambil detail pemesanan
+    const [result] = await pool.query(
+      `
+      SELECT 
+        p.*,
+        pr.nama AS nama_produk,
+        pr.gambar AS gambar_produk,
+        pr.harga AS harga_produk,
+        u.nama AS nama_pelanggan,
+        u.email AS email_pelanggan,
+        u.no_hp AS telepon_pelanggan,
+        u.alamat, 
+        s.nama AS metode_pengiriman,
+        s.estimasi,
+        s.biaya AS biaya_pengiriman
+      FROM pemesanan p
+      JOIN produk pr ON p.produkId = pr.produkId
+      JOIN users u ON p.userId = u.userId
+      LEFT JOIN metode_pengiriman s ON p.shippingId = s.shippingId
+      WHERE p.midtrans_order_id = ? OR p.pemesananId = ?
+      `,
+      [orderId, orderId]
+    );
+
+    if (result.length === 0) {
+      return res.status(404).json({ message: 'Pesanan tidak ditemukan' });
+    }
+
+    // Format data untuk frontend
+    const orderData = {
+      orderNumber: result[0].midtrans_order_id,
+      pemesananId: result[0].pemesananId,
+      status: result[0].status_pembayaran,
+      tanggal: result[0].created_at,
+      customer: {
+        name: result[0].nama_pelanggan,
+        email: result[0].email_pelanggan,
+        phone: result[0].telepon_pelanggan,
+        address: result[0].alamat, // Ambil langsung dari tabel users
+        country: 'Indonesia',
+      },
+      shipping: {
+        method: result[0].metode_pengiriman,
+        estimatedDelivery: result[0].estimasi || '3-5 hari kerja',
+        cost: result[0].biaya_pengiriman,
+      },
+      items: [
+        {
+          name: result[0].nama_produk,
+          price: result[0].harga_produk,
+          qty: result[0].jumlah,
+          subtotal: result[0].harga_produk * result[0].jumlah,
+          image: result[0].gambar_produk || '/api/placeholder/80/80',
+          notes: result[0].catatan,
+        },
+      ],
+      summary: {
+        subtotal: result[0].harga_produk * result[0].jumlah,
+        shipping: result[0].biaya_pengiriman,
+        total: result[0].total_harga,
+      },
+      payment: {
+        method: result[0].metode_pembayaran,
+        status: result[0].status_pembayaran,
+      },
+    };
+
+    res.status(200).json({
+      success: true,
+      data: orderData,
+    });
+  } catch (error) {
+    console.error('Error fetching order details:', error);
+    res.status(500).json({
+      message: 'Gagal mengambil detail pesanan',
+      error: error.message,
+    });
+  }
+};
+
+const getAllPemesanan = async (req, res) => {
+  try {
+    // Tambahkan opsi pagination
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    // Filter status jika ada
+    const statusFilter = req.query.status ? `AND p.status_pembayaran = '${req.query.status}'` : '';
+
+    // Filter tanggal jika ada
+    const dateFilter = req.query.date ? `AND DATE(p.created_at) = '${req.query.date}'` : '';
+
+    // Query total data untuk pagination
+    const [countResult] = await pool.query(`SELECT COUNT(*) as total FROM pemesanan p WHERE 1=1 ${statusFilter} ${dateFilter}`);
+
+    const totalItems = countResult[0].total;
+    const totalPages = Math.ceil(totalItems / limit);
+
+    // Query untuk mengambil data pemesanan dengan informasi lengkap
+    const [orders] = await pool.query(
+      `SELECT 
+        p.midtrans_order_id,
+        p.pemesananId,
+        p.userId, 
+        u.nama AS nama_pelanggan,
+        u.email AS email_pelanggan,
+        u.no_hp AS no_hp_pelanggan,
+        u.alamat AS alamat_pelanggan,
+        p.status_pembayaran,
+        p.status_pengiriman,
+        p.created_at,
+        COALESCE(pr.harga, 0) as harga_produk,
+        COALESCE(p.jumlah, 1) as jumlah,
+        COALESCE(p.total_harga, pr.harga * COALESCE(p.jumlah, 1)) as total_harga,
+        COALESCE(pr.nama, 'Produk Tidak Dikenal') AS nama_produk, 
+        COALESCE(pr.gambar, '/path/to/placeholder-image.jpg') AS gambar_produk,
+        COALESCE(s.nama, 'Tidak Diketahui') AS nama_shipping,
+        COALESCE(s.biaya, 0) as biaya_pengiriman,
+        p.catatan
+      FROM pemesanan p
+      LEFT JOIN produk pr ON p.produkId = pr.produkId
+      LEFT JOIN users u ON p.userId = u.userId
+      LEFT JOIN metode_pengiriman s ON p.shippingId = s.shippingId
+      WHERE 1=1 ${statusFilter} ${dateFilter}
+      ORDER BY p.created_at DESC
+      LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
+
+    // Log untuk debugging
+    console.log(`Total orders: ${totalItems}, Page: ${page}/${totalPages}, Orders on this page: ${orders.length}`);
+
+    res.status(200).json({
+      success: true,
+      data: orders,
+      pagination: {
+        totalItems,
+        totalPages,
+        currentPage: page,
+        itemsPerPage: limit,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching all orders:', error);
+    res.status(500).json({
+      message: 'Gagal mengambil data pemesanan',
+      error: error.message,
+    });
+  }
+};
+
+// Fungsi untuk mengubah status pengiriman
+const updateShippingStatus = async (req, res) => {
+  const { orderId } = req.params;
+  const { status_pengiriman } = req.body;
+
+  if (!orderId || !status_pengiriman) {
+    return res.status(400).json({ message: 'Order ID dan status pengiriman diperlukan' });
+  }
+
+  const validStatus = ['diproses', 'dikirim', 'selesai', 'dibatalkan'];
+  if (!validStatus.includes(status_pengiriman)) {
+    return res.status(400).json({
+      message: 'Status pengiriman tidak valid',
+      validStatus,
+    });
+  }
+
+  try {
+    const [result] = await pool.query('UPDATE pemesanan SET status_pengiriman = ? WHERE midtrans_order_id = ? ', [status_pengiriman, orderId]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'Pesanan tidak ditemukan' });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Status pengiriman berhasil diperbarui',
+      updatedStatus: status_pengiriman,
+    });
+  } catch (error) {
+    console.error('Error updating shipping status:', error);
+    res.status(500).json({
+      message: 'Gagal memperbarui status pengiriman',
+      error: error.message,
+    });
+  }
+};
+
+// Tambahkan fungsi ini ke module.exports
 module.exports = {
   createPemesanan,
-  getRiwayatPemesanan,
   updatePaymentStatus,
+  getRiwayatPemesanan,
+  getPemesananById,
+  getAllPemesanan, // Tambahkan fungsi baru ini
+  updateShippingStatus,
 };

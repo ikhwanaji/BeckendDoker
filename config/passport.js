@@ -3,12 +3,11 @@ const passport = require('passport');
 const { ExtractJwt, Strategy: JwtStrategy } = require('passport-jwt');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { pool } = require('./db'); // Mengimpor koneksi database
-const JWT_SECRET = process.env.JWT_SECRET;
 
 // Konfigurasi JWT Strategy
 const jwtOptions = {
   jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-  secretOrKey: JWT_SECRET,
+  secretOrKey: process.env.JWT_SECRET,
 };
 
 // Strategi untuk memverifikasi token

@@ -28,9 +28,9 @@ const addPaket = async (req, res) => {
 
   const query = `
         INSERT INTO paket 
-        (title, harga, gambar, items, created_at, updated_at) 
+        (title, harga, gambar, stok, items, created_at, updated_at) 
         VALUES 
-        (?, ?, ?, ?, NOW(), NOW())
+        (?, ?, ?, ?, ?, NOW(), NOW())
     `;
 
   try {

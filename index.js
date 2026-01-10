@@ -8,22 +8,21 @@ const produkRoutes = require('./routes/produkRoutes');
 const shippingMethodRoutes = require('./routes/shippingMethodRoutes');
 const paketRoutes = require('./routes/paketRoutes');
 const pemesananRoutes = require('./routes/pemesananRoutes');
+const OrderPaketRoutes = require('./routes/OrderPaketRoutes');
+const penyakitRouter = require('./routes/penyakitRoute');
 const { notFoundHandler, errorHandler } = require('./middleware/errorMiddleware');
 
 // Konfigurasi environment variables
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT;
+const PORT = process.env.DB_PORT;
 
 // Middleware CORS dengan konfigurasi lebih lengkap
 app.use(
   cors({
-    origin:[ 
-      process.env.FRONTEND_URL, 
-      'https://doker.vercel.app',
-    ],
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    origin: [process.env.FRONTEND_URL, process.env.API_URL, 'https://doker-zeta.vercel.app', 'https://7b192837034b.ngrok-free.app'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
   })
@@ -46,6 +45,8 @@ app.use('/api/produks', produkRoutes);
 app.use('/api/shipping-methods', shippingMethodRoutes);
 app.use('/api', paketRoutes);
 app.use('/api/pemesanan', pemesananRoutes);
+app.use('/api/order-paket', OrderPaketRoutes);
+app.use('/api/penyakit', penyakitRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);
 

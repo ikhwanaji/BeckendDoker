@@ -1,5 +1,6 @@
 const { pool } = require('../config/db'); // Mengimpor pool dari db.js
 const bcrypt = require('bcrypt');
+const nodemailer = require('nodemailer');
 const fs = require('fs');
 const path = require('path');
 const validator = require('validator');
@@ -166,7 +167,7 @@ const login = [
         role: user.role,
       };
 
-      const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+      const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN, algorithm: 'HS256' });
 
       res.json({
         status: 'success',
@@ -237,7 +238,7 @@ const loginAdmin = [
         role: admin.role,
       };
 
-      const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+      const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN, algorithm: 'HS256' });
 
       res.json({
         status: 'success',
@@ -675,6 +676,173 @@ const logoutAdmin = (req, res) => {
   }
 };
 
+// Konfigurasi email transporter (gunakan Gmail atau service lainnya)
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: process.env.SMTP_PORT,
+  auth: {
+    user: process.env.SMTP_USER, // email Anda
+    pass: process.env.SMTP_PASS, // app password Gmail atau password email
+  },
+  tls: {
+    rejectUnauthorized: false,
+  },
+});
+
+transporter.verify((error, success) => {
+  if (error) {
+    console.error('Email transporter error:', error);
+  } else {
+    console.log('Email transporter ready');
+  }
+});
+
+// Fungsi untuk generate kode 4 digit
+const generateResetCode = () => {
+  return Math.floor(Math.random() * (9999 - 1000 + 1)) + 1000;
+};
+
+// Controller untuk forgot password
+const forgotPassword = async (req, res) => {
+  const { email } = req.body;
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    // Validasi email
+    if (!email || !validator.isEmail(email)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Email tidak valid',
+      });
+    }
+
+    // Cek apakah email terdaftar
+    const [users] = await connection.query('SELECT * FROM users WHERE email = ?', [email]);
+
+    if (users.length === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Email tidak terdaftar',
+      });
+    }
+
+    const user = users[0];
+
+    // Generate kode reset 4 digit
+    const resetCode = generateResetCode();
+    const resetCodeExpiry = new Date(Date.now() + 15 * 60 * 1000); // Berlaku 15 menit
+
+    // Simpan kode reset ke database (Anda perlu menambah kolom reset_code dan reset_code_expiry di tabel users)
+    await connection.query('UPDATE users SET reset_code = ?, reset_code_expiry = ? WHERE email = ?', [resetCode, resetCodeExpiry, email]);
+
+    // Kirim email dengan kode reset
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: 'Kode Reset Password',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333; text-align: center;">Reset Password</h2>
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <p>Halo <strong>${user.nama}</strong>,</p>
+            <p>Anda telah meminta untuk mereset password akun Anda. Gunakan kode berikut untuk melanjutkan proses reset:</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <span style="font-size: 32px; font-weight: bold; color: #007bff; letter-spacing: 8px; background-color: #e9f4ff; padding: 15px 25px; border-radius: 8px; display: inline-block;">
+                ${resetCode}
+              </span>
+            </div>
+            <p><strong>Kode ini berlaku selama 15 menit.</strong></p>
+            <p>Jika Anda tidak meminta reset password, abaikan email ini.</p>
+          </div>
+          <p style="color: #666; font-size: 12px; text-align: center;">
+            Email ini dikirim secara otomatis, mohon tidak membalas email ini.
+          </p>
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    await connection.commit();
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Kode reset password telah dikirim ke email Anda',
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error forgot password:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Gagal mengirim kode reset password',
+      details: error.message,
+    });
+  } finally {
+    connection.release();
+  }
+};
+
+// Controller untuk verifikasi kode dan reset password
+const verifyResetCode = async (req, res) => {
+  const { email, resetCode, newPassword } = req.body;
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    // Validasi input
+    if (!email || !resetCode || !newPassword) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Email, kode reset, dan password baru harus diisi',
+      });
+    }
+
+    // Validasi password
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Password minimal 6 karakter',
+      });
+    }
+
+    // Cek kode reset
+    const [users] = await connection.query('SELECT * FROM users WHERE email = ? AND reset_code = ? AND reset_code_expiry > NOW()', [email, resetCode]);
+
+    if (users.length === 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Kode reset tidak valid atau sudah kedaluwarsa',
+      });
+    }
+
+    // Hash password baru
+    const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
+
+    // Update password dan hapus kode reset
+    await connection.query('UPDATE users SET password = ?, reset_code = NULL, reset_code_expiry = NULL WHERE email = ?', [hashedPassword, email]);
+
+    await connection.commit();
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Password berhasil direset',
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error verify reset code:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Gagal mereset password',
+      details: error.message,
+    });
+  } finally {
+    connection.release();
+  }
+};
+
 // Ekspor controller
 module.exports = {
   registerValidation,
@@ -688,4 +856,6 @@ module.exports = {
   deleteUser,
   updateUserPassword,
   logoutAdmin,
+  forgotPassword,
+  verifyResetCode,
 };
