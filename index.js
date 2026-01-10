@@ -38,6 +38,13 @@ app.use((req, res, next) => {
   next();
 });
 
+app.get('/', (req, res) => {
+  res.send({
+    message: 'Halo! Server Doker Backend berjalan dengan lancar 🚀',
+    status: 'success',
+  });
+});
+
 // Rute
 app.use('/api/auth', userRoutes);
 app.use('/api/kategoris', kategoriRoutes);
